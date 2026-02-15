@@ -1,5 +1,8 @@
 import { useState } from "react";
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const PHONE_PATTERN = /^[0-9+()\-\s]{7,20}$/;
+
 const COLORS = {
   dark: "#005030",
   primary: "#10B060",
@@ -24,7 +27,9 @@ export default function Home() {
     phone: "",
     requirement: "Samples / Grade selection",
     message: "",
+    website: "",
   });
+  const [formStartedAt] = useState(Date.now());
 
   const [status, setStatus] = useState({ type: "idle", msg: "" });
 
@@ -37,8 +42,34 @@ export default function Home() {
     e.preventDefault();
     setStatus({ type: "idle", msg: "" });
 
-    if (!form.name || !form.email) {
+    const cleanName = form.name.trim();
+    const cleanEmail = form.email.trim();
+    const cleanPhone = form.phone.trim();
+    const cleanMessage = form.message.trim();
+    const secondsToSubmit = Math.floor((Date.now() - formStartedAt) / 1000);
+
+    if (!cleanName || !cleanEmail) {
       setStatus({ type: "error", msg: "Please enter Name and Email." });
+      return;
+    }
+    if (!EMAIL_PATTERN.test(cleanEmail)) {
+      setStatus({ type: "error", msg: "Please enter a valid email address." });
+      return;
+    }
+    if (cleanPhone && !PHONE_PATTERN.test(cleanPhone)) {
+      setStatus({ type: "error", msg: "Please enter a valid phone number." });
+      return;
+    }
+    if (form.website) {
+      setStatus({ type: "error", msg: "Spam check failed. Please refresh and try again." });
+      return;
+    }
+    if (secondsToSubmit < 3) {
+      setStatus({ type: "error", msg: "Please review your details and submit again." });
+      return;
+    }
+    if (cleanMessage && cleanMessage.length < 10) {
+      setStatus({ type: "error", msg: "Please add a few more details in your message." });
       return;
     }
     if (!apiUrl) {
@@ -57,7 +88,15 @@ export default function Home() {
         body: JSON.stringify({
           key: apiKey,
           source: "website",
-          ...form,
+          name: cleanName,
+          email: cleanEmail,
+          phone: cleanPhone,
+          company: form.company.trim(),
+          requirement: form.requirement,
+          message: cleanMessage,
+          website: form.website,
+          formStartedAt,
+          submitTs: Date.now(),
           page: "home",
         }),
       });
@@ -75,6 +114,7 @@ export default function Home() {
         phone: "",
         requirement: "Samples / Grade selection",
         message: "",
+        website: "",
       });
     } catch (err) {
       setStatus({ type: "error", msg: err?.message || "Submit failed. Try again." });
@@ -258,18 +298,28 @@ export default function Home() {
 
               <form onSubmit={submitLead} style={{ display: "grid", gap: 10 }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <input name="name" value={form.name} onChange={onChange} placeholder="Your name *"
+                  <input name="name" value={form.name} onChange={onChange} placeholder="Your name *" required
                     style={inputStyle(COLORS)} />
                   <input name="company" value={form.company} onChange={onChange} placeholder="Company"
                     style={inputStyle(COLORS)} />
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <input name="email" value={form.email} onChange={onChange} placeholder="Email *"
+                  <input name="email" value={form.email} onChange={onChange} placeholder="Email *" type="email" required
                     style={inputStyle(COLORS)} />
-                  <input name="phone" value={form.phone} onChange={onChange} placeholder="Phone"
+                  <input name="phone" value={form.phone} onChange={onChange} placeholder="Phone" type="tel"
                     style={inputStyle(COLORS)} />
                 </div>
+
+                <input
+                  name="website"
+                  value={form.website}
+                  onChange={onChange}
+                  tabIndex={-1}
+                  autoComplete="off"
+                  aria-hidden="true"
+                  style={{ position: "absolute", left: "-9999px", opacity: 0, pointerEvents: "none" }}
+                />
 
                 <select name="requirement" value={form.requirement} onChange={onChange} style={inputStyle(COLORS)}>
                   <option>Samples / Grade selection</option>

@@ -133,6 +133,8 @@ function validatePayload_(payload) {
     message: str_(payload.message, 2500, "")
   };
   var honeypot = str_(payload.website, 200, "");
+  var formStartedAt = Number(payload.formStartedAt || 0);
+  var submitTs = Number(payload.submitTs || 0);
 
   if (!clean.name || !clean.email) {
     return { ok: false, message: "Name and Email are required" };
@@ -143,11 +145,35 @@ function validatePayload_(payload) {
   if (honeypot) {
     return { ok: false, message: "Rejected as spam" };
   }
+  var timeCheck = validateSubmissionTiming_(formStartedAt, submitTs);
+  if (!timeCheck.ok) {
+    return { ok: false, message: timeCheck.message };
+  }
   if (clean.message && hasSpamSignals_(clean.message)) {
     return { ok: false, message: "Message failed spam checks" };
   }
+  if (hasSpamSignals_([clean.name, clean.company, clean.requirement].join(" "))) {
+    return { ok: false, message: "Submission failed spam checks" };
+  }
+  if (isDisposableEmail_(clean.email)) {
+    return { ok: false, message: "Please use your business email address" };
+  }
 
   return { ok: true, clean: clean };
+}
+
+function validateSubmissionTiming_(formStartedAt, submitTs) {
+  if (!formStartedAt || !submitTs || isNaN(formStartedAt) || isNaN(submitTs)) {
+    return { ok: false, message: "Missing form metadata" };
+  }
+  var deltaMs = submitTs - formStartedAt;
+  if (deltaMs < 3000) {
+    return { ok: false, message: "Submitted too quickly" };
+  }
+  if (deltaMs > 2 * 60 * 60 * 1000) {
+    return { ok: false, message: "Form expired. Please refresh and submit again." };
+  }
+  return { ok: true };
 }
 
 function enforceRateLimit_(clean) {
@@ -193,11 +219,23 @@ function incrementCounter_(cache, key, ttlSeconds) {
 function hasSpamSignals_(text) {
   var t = String(text || "").toLowerCase();
   var links = (t.match(/https?:\/\//g) || []).length;
-  var spamTerms = /(crypto|bitcoin|forex|casino|viagra|loan|seo|backlink)/;
+  var spamTerms = /(crypto|bitcoin|forex|casino|viagra|loan|seo|backlink|telegram|whatsapp\s*group|earn\s*money)/;
   if (links >= 3) return true;
   if (spamTerms.test(t)) return true;
   if (/(.)\1{8,}/.test(t)) return true;
   return false;
+}
+
+function isDisposableEmail_(email) {
+  var domain = String(email || "").split("@")[1] || "";
+  var blocked = {
+    "mailinator.com": true,
+    "guerrillamail.com": true,
+    "10minutemail.com": true,
+    "tempmail.com": true,
+    "yopmail.com": true
+  };
+  return !!blocked[domain.toLowerCase()];
 }
 
 function isValidEmail_(email) {
