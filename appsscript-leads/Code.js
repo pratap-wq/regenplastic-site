@@ -66,6 +66,8 @@ function doPost(e) {
       validation.clean.message
     ]);
 
+    notifyLeadIfNeeded_(validation.clean, now);
+
     return json_(true, "ok", corsOrigin, {
       version: getVersion_(),
       ts: now.toISOString()
@@ -80,6 +82,15 @@ function doGet(e) {
   var props = PropertiesService.getScriptProperties();
   var corsOrigin = props.getProperty("CORS_ORIGIN") || "*";
   var mode = (e && e.parameter && e.parameter.mode) ? String(e.parameter.mode).toLowerCase() : "";
+  var fn = (e && e.parameter && e.parameter.fn) ? String(e.parameter.fn).toLowerCase() : "";
+
+  if (fn === "start") {
+    return json_(true, "start", corsOrigin, {
+      token: createStartToken_(),
+      version: getVersion_(),
+      ts: new Date().toISOString()
+    });
+  }
 
   if (mode === "options" || mode === "preflight") {
     return json_(true, "preflight", corsOrigin, {
@@ -133,8 +144,7 @@ function validatePayload_(payload) {
     message: str_(payload.message, 2500, "")
   };
   var honeypot = str_(payload.website, 200, "");
-  var formStartedAt = Number(payload.formStartedAt || 0);
-  var submitTs = Number(payload.submitTs || 0);
+
 
   if (!clean.name || !clean.email) {
     return { ok: false, message: "Name and Email are required" };
@@ -145,7 +155,7 @@ function validatePayload_(payload) {
   if (honeypot) {
     return { ok: false, message: "Rejected as spam" };
   }
-  var timeCheck = validateSubmissionTiming_(formStartedAt, submitTs);
+
   if (!timeCheck.ok) {
     return { ok: false, message: timeCheck.message };
   }
@@ -162,19 +172,11 @@ function validatePayload_(payload) {
   return { ok: true, clean: clean };
 }
 
-function validateSubmissionTiming_(formStartedAt, submitTs) {
-  if (!formStartedAt || !submitTs || isNaN(formStartedAt) || isNaN(submitTs)) {
-    return { ok: false, message: "Missing form metadata" };
-  }
-  var deltaMs = submitTs - formStartedAt;
+
   if (deltaMs < 3000) {
     return { ok: false, message: "Submitted too quickly" };
   }
   if (deltaMs > 2 * 60 * 60 * 1000) {
-    return { ok: false, message: "Form expired. Please refresh and submit again." };
-  }
-  return { ok: true };
-}
 
 function enforceRateLimit_(clean) {
   var cache = CacheService.getScriptCache();
