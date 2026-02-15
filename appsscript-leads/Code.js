@@ -144,7 +144,7 @@ function validatePayload_(payload) {
     message: str_(payload.message, 2500, "")
   };
   var honeypot = str_(payload.website, 200, "");
-  var startToken = str_(payload.startToken, 120, "");
+
 
   if (!clean.name || !clean.email) {
     return { ok: false, message: "Name and Email are required" };
@@ -155,7 +155,7 @@ function validatePayload_(payload) {
   if (honeypot) {
     return { ok: false, message: "Rejected as spam" };
   }
-  var timeCheck = validateSubmissionTiming_(startToken);
+
   if (!timeCheck.ok) {
     return { ok: false, message: timeCheck.message };
   }
@@ -172,79 +172,11 @@ function validatePayload_(payload) {
   return { ok: true, clean: clean };
 }
 
-function createStartToken_() {
-  var cache = CacheService.getScriptCache();
-  var token = Utilities.getUuid();
-  cache.put("start:" + token, String(Date.now()), 2 * 60 * 60);
-  return token;
-}
 
-function validateSubmissionTiming_(startToken) {
-  if (!startToken) {
-    return { ok: false, message: "Missing form token" };
-  }
-
-  var cache = CacheService.getScriptCache();
-  var key = "start:" + startToken;
-  var startedRaw = cache.get(key);
-  if (!startedRaw) {
-    return { ok: false, message: "Form token missing or expired" };
-  }
-
-  var startedAt = Number(startedRaw);
-  if (isNaN(startedAt)) {
-    cache.remove(key);
-    return { ok: false, message: "Invalid form token" };
-  }
-
-  var deltaMs = Date.now() - startedAt;
   if (deltaMs < 3000) {
     return { ok: false, message: "Submitted too quickly" };
   }
   if (deltaMs > 2 * 60 * 60 * 1000) {
-    cache.remove(key);
-    return { ok: false, message: "Form expired. Please refresh and submit again." };
-  }
-
-  cache.remove(key);
-  return { ok: true };
-}
-
-function notifyLeadIfNeeded_(clean, now) {
-  var props = PropertiesService.getScriptProperties();
-  var emailEnabledRaw = props.getProperty("EMAIL_ENABLED");
-  var emailEnabled = emailEnabledRaw == null ? true : String(emailEnabledRaw).toLowerCase() !== "false";
-  if (!emailEnabled) return;
-
-  var notifyEmail = props.getProperty("NOTIFY_EMAIL") || "info@regenplastic.com";
-  var cache = CacheService.getScriptCache();
-  var throttleKey = "notify:" + hash_([clean.email, clean.phone].join("|").toLowerCase());
-
-  if (cache.get(throttleKey)) return;
-
-  var subject = [
-    "New Website Enquiry",
-    clean.requirement || "General",
-    clean.name + " (" + (clean.company || "No Company") + ")"
-  ].join(" – ");
-
-  var body = [
-    "A new website enquiry has been received.",
-    "",
-    "Timestamp: " + now.toISOString(),
-    "Name: " + clean.name,
-    "Company: " + (clean.company || "-"),
-    "Email: " + clean.email,
-    "Phone: " + (clean.phone || "-"),
-    "Requirement: " + (clean.requirement || "-"),
-    "Message: " + (clean.message || "-"),
-    "Page + Source: " + clean.page + " + " + clean.source,
-    "Google Maps: https://maps.app.goo.gl/YNnVEYMnfJxWxePR6"
-  ].join("\n");
-
-  MailApp.sendEmail(notifyEmail, subject, body);
-  cache.put(throttleKey, "1", 600);
-}
 
 function enforceRateLimit_(clean) {
   var cache = CacheService.getScriptCache();

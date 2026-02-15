@@ -29,8 +29,7 @@ export default function Home() {
     message: "",
     website: "",
   });
-  const [formStartedAt, setFormStartedAt] = useState(0);
-  const [startToken, setStartToken] = useState("");
+
 
   const [status, setStatus] = useState({ type: "idle", msg: "" });
 
@@ -75,17 +74,6 @@ export default function Home() {
     const cleanPhone = form.phone.trim();
     const cleanMessage = form.message.trim();
 
-    let attempt = { formStartedAt, token: startToken };
-    if (status.type === "idle" && (!attempt.formStartedAt || !attempt.token)) {
-      try {
-        attempt = await startEnquiryAttempt(true);
-      } catch (err) {
-        setStatus({ type: "error", msg: err?.message || "Unable to start enquiry. Try again." });
-        return;
-      }
-    }
-
-    const secondsToSubmit = attempt.formStartedAt ? Math.floor((Date.now() - attempt.formStartedAt) / 1000) : 0;
 
     if (!cleanName || !cleanEmail) {
       setStatus({ type: "error", msg: "Please enter Name and Email." });
@@ -134,7 +122,7 @@ export default function Home() {
           requirement: form.requirement,
           message: cleanMessage,
           website: form.website,
-          startToken: attempt.token,
+
           page: "home",
         }),
       });
