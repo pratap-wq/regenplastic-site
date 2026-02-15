@@ -1,5 +1,8 @@
 import { useState } from "react";
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const PHONE_PATTERN = /^[0-9+()\-\s]{7,20}$/;
+
 const COLORS = {
   dark: "#005030",
   primary: "#10B060",
@@ -24,7 +27,10 @@ export default function Home() {
     phone: "",
     requirement: "Samples / Grade selection",
     message: "",
+    website: "",
   });
+  const [formStartedAt, setFormStartedAt] = useState(0);
+  const [startToken, setStartToken] = useState("");
 
   const [status, setStatus] = useState({ type: "idle", msg: "" });
 
@@ -33,12 +39,76 @@ export default function Home() {
 
   const onChange = (e) => setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
 
+  async function startEnquiryAttempt(forceRefresh) {
+    if (!apiUrl) return null;
+    if (!forceRefresh && formStartedAt && startToken) return { formStartedAt: formStartedAt, token: startToken };
+
+    const startUrl = `${apiUrl}${apiUrl.includes("?") ? "&" : "?"}fn=start`;
+    const startRes = await fetch(startUrl, { method: "GET" });
+    const startData = await startRes.json().catch(() => ({}));
+    if (!startRes.ok || startData?.ok !== true || !startData?.token) {
+      throw new Error(startData?.message || "Unable to start enquiry form.");
+    }
+
+    const startedAt = Date.now();
+    setFormStartedAt(startedAt);
+    setStartToken(startData.token);
+    return { formStartedAt: startedAt, token: startData.token };
+  }
+
+  async function handleAttemptStart() {
+    if (!formStartedAt || !startToken) {
+      try {
+        await startEnquiryAttempt(false);
+      } catch {
+        // Start token retrieval is retried at submit time.
+      }
+    }
+  }
+
   async function submitLead(e) {
     e.preventDefault();
     setStatus({ type: "idle", msg: "" });
 
-    if (!form.name || !form.email) {
+    const cleanName = form.name.trim();
+    const cleanEmail = form.email.trim();
+    const cleanPhone = form.phone.trim();
+    const cleanMessage = form.message.trim();
+
+    let attempt = { formStartedAt, token: startToken };
+    if (status.type === "idle" && (!attempt.formStartedAt || !attempt.token)) {
+      try {
+        attempt = await startEnquiryAttempt(true);
+      } catch (err) {
+        setStatus({ type: "error", msg: err?.message || "Unable to start enquiry. Try again." });
+        return;
+      }
+    }
+
+    const secondsToSubmit = attempt.formStartedAt ? Math.floor((Date.now() - attempt.formStartedAt) / 1000) : 0;
+
+    if (!cleanName || !cleanEmail) {
       setStatus({ type: "error", msg: "Please enter Name and Email." });
+      return;
+    }
+    if (!EMAIL_PATTERN.test(cleanEmail)) {
+      setStatus({ type: "error", msg: "Please enter a valid email address." });
+      return;
+    }
+    if (cleanPhone && !PHONE_PATTERN.test(cleanPhone)) {
+      setStatus({ type: "error", msg: "Please enter a valid phone number." });
+      return;
+    }
+    if (form.website) {
+      setStatus({ type: "error", msg: "Spam check failed. Please refresh and try again." });
+      return;
+    }
+    if (secondsToSubmit < 3) {
+      setStatus({ type: "error", msg: "Please review your details and submit again." });
+      return;
+    }
+    if (cleanMessage && cleanMessage.length < 10) {
+      setStatus({ type: "error", msg: "Please add a few more details in your message." });
       return;
     }
     if (!apiUrl) {
@@ -53,11 +123,18 @@ export default function Home() {
     try {
       const res = await fetch(apiUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({
           key: apiKey,
           source: "website",
-          ...form,
+          name: cleanName,
+          email: cleanEmail,
+          phone: cleanPhone,
+          company: form.company.trim(),
+          requirement: form.requirement,
+          message: cleanMessage,
+          website: form.website,
+          startToken: attempt.token,
           page: "home",
         }),
       });
@@ -75,7 +152,10 @@ export default function Home() {
         phone: "",
         requirement: "Samples / Grade selection",
         message: "",
+        website: "",
       });
+      setFormStartedAt(0);
+      setStartToken("");
     } catch (err) {
       setStatus({ type: "error", msg: err?.message || "Submit failed. Try again." });
     }
@@ -256,20 +336,30 @@ export default function Home() {
             <div>
               <h2 style={{ margin: "0 0 10px" }}>Enquiry</h2>
 
-              <form onSubmit={submitLead} style={{ display: "grid", gap: 10 }}>
+              <form onSubmit={submitLead} onFocusCapture={handleAttemptStart} style={{ display: "grid", gap: 10 }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <input name="name" value={form.name} onChange={onChange} placeholder="Your name *"
+                  <input name="name" value={form.name} onChange={onChange} placeholder="Your name *" required
                     style={inputStyle(COLORS)} />
                   <input name="company" value={form.company} onChange={onChange} placeholder="Company"
                     style={inputStyle(COLORS)} />
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <input name="email" value={form.email} onChange={onChange} placeholder="Email *"
+                  <input name="email" value={form.email} onChange={onChange} placeholder="Email *" type="email" required
                     style={inputStyle(COLORS)} />
-                  <input name="phone" value={form.phone} onChange={onChange} placeholder="Phone"
+                  <input name="phone" value={form.phone} onChange={onChange} placeholder="Phone" type="tel"
                     style={inputStyle(COLORS)} />
                 </div>
+
+                <input
+                  name="website"
+                  value={form.website}
+                  onChange={onChange}
+                  tabIndex={-1}
+                  autoComplete="off"
+                  aria-hidden="true"
+                  style={{ position: "absolute", left: "-9999px", opacity: 0, pointerEvents: "none" }}
+                />
 
                 <select name="requirement" value={form.requirement} onChange={onChange} style={inputStyle(COLORS)}>
                   <option>Samples / Grade selection</option>
@@ -282,7 +372,7 @@ export default function Home() {
                 <textarea name="message" value={form.message} onChange={onChange} placeholder="Message / requirement details"
                   rows={4} style={inputStyle(COLORS)} />
 
-                <button type="submit" style={{
+                <button type="submit" onClick={handleAttemptStart} style={{
                   cursor: "pointer",
                   background: COLORS.primary,
                   color: "black",
