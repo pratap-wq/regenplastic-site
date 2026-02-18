@@ -108,7 +108,7 @@ export default function Home() {
       return;
     }
 
-    const payload = JSON.stringify({
+    const payload = {
       key: apiKey,
       source: "website",
       name: cleanName,
@@ -119,10 +119,11 @@ export default function Home() {
       message: cleanMessage,
       website: form.website,
       page: "home",
-    });
+    };
+    const payloadJson = JSON.stringify(payload);
 
     try {
-      const beaconBody = new Blob([payload], { type: "text/plain;charset=utf-8" });
+      const beaconBody = new Blob([payloadJson], { type: "text/plain;charset=utf-8" });
       const beaconSent = typeof navigator !== "undefined" && navigator.sendBeacon(apiUrl, beaconBody);
 
       if (!beaconSent) {
@@ -130,7 +131,7 @@ export default function Home() {
           method: "POST",
           mode: "no-cors",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: payload,
+          body: payloadJson,
         });
       }
 
