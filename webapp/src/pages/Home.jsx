@@ -108,28 +108,30 @@ export default function Home() {
       return;
     }
 
+    const payload = JSON.stringify({
+      key: apiKey,
+      source: "website",
+      name: cleanName,
+      email: cleanEmail,
+      phone: cleanPhone,
+      company: form.company.trim(),
+      requirement: form.requirement,
+      message: cleanMessage,
+      website: form.website,
+      page: "home",
+    });
+
     try {
-      const res = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({
-          key: apiKey,
-          source: "website",
-          name: cleanName,
-          email: cleanEmail,
-          phone: cleanPhone,
-          company: form.company.trim(),
-          requirement: form.requirement,
-          message: cleanMessage,
-          website: form.website,
+      const beaconBody = new Blob([payload], { type: "text/plain;charset=utf-8" });
+      const beaconSent = typeof navigator !== "undefined" && navigator.sendBeacon(apiUrl, beaconBody);
 
-          page: "home",
-        }),
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.ok !== true) {
-        throw new Error(data?.error || "Failed to submit enquiry");
+      if (!beaconSent) {
+        await fetch(apiUrl, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: payload,
+        });
       }
 
       setStatus({ type: "ok", msg: "Enquiry submitted. Our team will contact you shortly." });
