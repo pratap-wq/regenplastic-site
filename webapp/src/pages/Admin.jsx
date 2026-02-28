@@ -152,7 +152,7 @@ export default function Admin() {
 
     setSaving(true);
     try {
-      await apiCall("site.update", { section, key, value });
+      await apiCall("site.update", { section, keyName: key, value });
       setMap((prev) => ({ ...prev, [fullKey]: value }));
       alert(`Saved: ${fullKey}`);
     } catch (e) {
@@ -178,7 +178,7 @@ export default function Admin() {
     try {
       for (const f of sectionSchema.fields) {
         const fk = `${sectionId}.${f.key}`;
-        await apiCall("site.update", { section: sectionId, key: f.key, value: draft[fk] ?? "" });
+        await apiCall("site.update", { section: sectionId, keyName: f.key, value: draft[fk] ?? "" });
       }
       setMap((prev) => {
         const next = { ...prev };
