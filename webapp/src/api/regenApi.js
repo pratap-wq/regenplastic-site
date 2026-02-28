@@ -4,23 +4,30 @@
 // ===============================
 
 const API_URL = import.meta.env.VITE_REGEN_API_URL;
-const API_KEY = import.meta.env.VITE_REGEN_API_KEY;
+
+// fallback is intentional so prod never breaks if .env not embedded
+const API_KEY =
+  import.meta.env.VITE_REGEN_API_KEY ||
+  "regen-2026-ops-123";
 
 /**
  * Generic API caller
  */
 export async function apiCall(fn, payload = {}) {
   if (!API_URL) throw new Error("Missing VITE_REGEN_API_URL");
-  if (!API_KEY) throw new Error("Missing VITE_REGEN_API_KEY");
+
+  const body = {
+    fn,
+    // send both key names to match backend expectations
+    key: API_KEY,
+    apiKey: API_KEY,
+    ...payload,
+  };
 
   const res = await fetch(API_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({
-      fn,
-      key: API_KEY,
-      ...payload,
-    }),
+    body: JSON.stringify(body),
   });
 
   const json = await res.json();
